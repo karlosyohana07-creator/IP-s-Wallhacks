@@ -1,0 +1,145 @@
+--// IP WallHack Module (AirHub Compatible)
+
+getgenv().AirHub = getgenv().AirHub or {}
+if getgenv().AirHub.WallHack then return end
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+local Drawing = Drawing
+
+--// WallHack table
+local WallHack = {
+	Settings = {
+		Enabled = true,
+		TeamCheck = false,
+		AliveCheck = true
+	},
+
+	Visuals = {
+		ESPSettings = {
+			Enabled = true,
+			DisplayName = true,
+			DisplayHealth = true,
+			DisplayDistance = true,
+			TextColor = Color3.fromRGB(255,255,255),
+			OutlineColor = Color3.fromRGB(0,0,0),
+			TextSize = 14,
+			TextTransparency = 1,
+			Outline = true,
+			TextFont = Drawing.Fonts.UI,
+			Offset = 20
+		}
+	},
+
+	Crosshair = {
+		Settings = {
+			Enabled = false
+		}
+	},
+
+	Functions = {}
+}
+
+--// Store
+getgenv().AirHub.WallHack = WallHack
+
+--// Internal storage
+local ESPObjects = {}
+
+--// Cleanup
+function WallHack.Functions:Exit()
+	for _, v in pairs(ESPObjects) do
+		if v.Text then v.Text:Remove() end
+	end
+	table.clear(ESPObjects)
+end
+
+function WallHack.Functions:Restart()
+	WallHack.Functions:Exit()
+end
+
+function WallHack.Functions:ResetSettings()
+	-- optional
+end
+
+--// ESP creation
+local function createESP(player)
+	if player == LocalPlayer then return end
+
+	local text = Drawing.new("Text")
+	text.Center = true
+	text.Outline = true
+
+	ESPObjects[player] = {Text = text}
+
+	RunService.RenderStepped:Connect(function()
+		if not WallHack.Settings.Enabled or not WallHack.Visuals.ESPSettings.Enabled then
+			text.Visible = false
+			return
+		end
+
+		local char = player.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		local head = char and char:FindFirstChild("Head")
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+		if not (hrp and head and hum) then
+			text.Visible = false
+			return
+		end
+
+		if WallHack.Settings.AliveCheck and hum.Health <= 0 then
+			text.Visible = false
+			return
+		end
+
+		if WallHack.Settings.TeamCheck and player.Team == LocalPlayer.Team then
+			text.Visible = false
+			return
+		end
+
+		local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+		if not onScreen then
+			text.Visible = false
+			return
+		end
+
+		local dist = (hrp.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+
+		local label = ""
+		if WallHack.Visuals.ESPSettings.DisplayName then
+			label ..= player.DisplayName
+		end
+		if WallHack.Visuals.ESPSettings.DisplayHealth then
+			label ..= " ["..math.floor(hum.Health).."]"
+		end
+		if WallHack.Visuals.ESPSettings.DisplayDistance then
+			label ..= " ("..math.floor(dist)..")"
+		end
+
+		text.Text = label
+		text.Position = Vector2.new(pos.X, pos.Y - WallHack.Visuals.ESPSettings.Offset)
+		text.Size = WallHack.Visuals.ESPSettings.TextSize
+		text.Color = WallHack.Visuals.ESPSettings.TextColor
+		text.Transparency = WallHack.Visuals.ESPSettings.TextTransparency
+		text.Font = WallHack.Visuals.ESPSettings.TextFont
+		text.OutlineColor = WallHack.Visuals.ESPSettings.OutlineColor
+		text.Visible = true
+	end)
+end
+
+--// Player handling
+for _, p in ipairs(Players:GetPlayers()) do
+	createESP(p)
+end
+
+Players.PlayerAdded:Connect(createESP)
+Players.PlayerRemoving:Connect(function(p)
+	if ESPObjects[p] and ESPObjects[p].Text then
+		ESPObjects[p].Text:Remove()
+	end
+	ESPObjects[p] = nil
+end)
